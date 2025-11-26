@@ -76,6 +76,8 @@ class MeshtasticManager:
 
     def disconnect(self):
         if self.interface:
+            # Unsubscribe first to prevent reconnection attempts
+            self._unsubscribe_all()
             try:
                 self.interface.close()
             except Exception:
@@ -83,7 +85,6 @@ class MeshtasticManager:
             self.interface = None
             self.connection_type = None
             self.address = None
-            self._unsubscribe_all()
 
     def _setup_callbacks(self):
         pub.subscribe(self._on_receive, "meshtastic.receive")
@@ -222,29 +223,72 @@ class MeshtasticManager:
         })
 
     def _on_connection_lost(self, interface, topic=pub.AUTO_TOPIC):
+        logger.warning(f"Connection lost to {self.address}")
         ws_manager.broadcast_sync({
             "type": "connection_status",
-            "data": {"connected": False}
+            "data": {"connected": False, "reconnecting": True}
         })
-        self.interface = None
-        self.connection_type = None
-        self.address = None
 
-    def _on_node_updated(self, node, topic=pub.AUTO_TOPIC):
+        # Save connection info for reconnection
+        saved_type = self.connection_type
+        saved_address = self.address
+
+        # Clean up current interface
+        if self.interface:
+            try:
+                self.interface.close()
+            except Exception:
+                pass
+        self.interface = None
+
+        # Attempt reconnection if it was TCP connection
+        if saved_type == "tcp" and saved_address:
+            logger.info(f"Attempting to reconnect to {saved_address}")
+            parts = saved_address.split(":")
+            hostname = parts[0]
+            port = int(parts[1]) if len(parts) > 1 else 4403
+
+            # Try to reconnect
+            success = self.connect_tcp(hostname, port)
+            if success:
+                logger.info(f"Reconnection successful to {saved_address}")
+            else:
+                logger.error(f"Reconnection failed to {saved_address}")
+                self.connection_type = None
+                self.address = None
+
+    def _on_node_updated(self, node, interface):
         ws_manager.broadcast_sync({
             "type": "node_update",
             "data": self._format_node(node)
         })
 
     def _format_node(self, node: dict) -> dict:
+        # Convert protobuf objects to dicts for JSON serialization
+        user = node.get("user")
+        position = node.get("position")
+        device_metrics = node.get("deviceMetrics")
+
+        # Deep convert: check if converted dicts still have protobuf objects inside
+        def deep_convert(obj):
+            if obj is None:
+                return None
+            if hasattr(obj, 'DESCRIPTOR'):
+                obj = MessageToDict(obj)
+            if isinstance(obj, dict):
+                return {k: deep_convert(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [deep_convert(item) for item in obj]
+            return obj
+
         return {
-            "id": node.get("user", {}).get("id"),
+            "id": node.get("user", {}).get("id") if user else None,
             "num": node.get("num"),
-            "user": node.get("user"),
-            "position": node.get("position"),
+            "user": deep_convert(user),
+            "position": deep_convert(position),
             "snr": node.get("snr"),
             "lastHeard": node.get("lastHeard"),
-            "deviceMetrics": node.get("deviceMetrics")
+            "deviceMetrics": deep_convert(device_metrics)
         }
 
     def get_nodes(self) -> list:
