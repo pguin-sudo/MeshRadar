@@ -153,14 +153,17 @@ class MeshtasticManager:
         # According to protobuf: "route" contains intermediate hops (nodes visited on the way)
         # Source and destination are NOT included in the route array
         route = traceroute_data.get("route", [])
+        route_back = traceroute_data.get("routeBack", [])
         snr_towards = traceroute_data.get("snrTowards", [])
         snr_back = traceroute_data.get("snrBack", [])
 
         # Filter out invalid node IDs (0xFFFFFFFF = 4294967295 = unknown/encrypted nodes)
         if isinstance(route, list):
             route = [node for node in route if node != 4294967295 and node != 0]
+        if isinstance(route_back, list):
+            route_back = [node for node in route_back if node != 4294967295 and node != 0]
 
-        logger.info(f"Traceroute response: from={packet.get('fromId')}, hops={len(route)}, route={route}, snr_towards={snr_towards}")
+        logger.info(f"Traceroute response: from={packet.get('fromId')}, hops_forward={len(route)}, hops_back={len(route_back)}, route={route}, route_back={route_back}")
 
         ws_manager.broadcast_sync({
             "type": "traceroute",
@@ -168,6 +171,7 @@ class MeshtasticManager:
                 "request_id": request_id,
                 "from": packet.get("fromId"),
                 "route": route,
+                "route_back": route_back,
                 "snr_towards": snr_towards if isinstance(snr_towards, list) else [],
                 "snr_back": snr_back if isinstance(snr_back, list) else []
             }

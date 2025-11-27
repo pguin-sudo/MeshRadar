@@ -1,23 +1,60 @@
-import { X, MapPin, Battery, Signal, Cpu, Route, Loader2 } from 'lucide-react'
+import { X, MapPin, Battery, Signal, Cpu, Route, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useMeshStore } from '@/store'
 import { useTraceroute } from '@/hooks/useApi'
 import { getNodeName } from '@/lib/utils'
+import { useEffect, useRef, useState } from 'react'
 
 export function NodeInfoPanel() {
-  const { selectedNode, setSelectedNode, tracerouteResult, setTracerouteResult, nodes } = useMeshStore()
+  const { selectedNode, setSelectedNode, tracerouteResult, setTracerouteResult, nodes, status } = useMeshStore()
   const traceroute = useTraceroute()
+  const [tracerouteTimeout, setTracerouteTimeout] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   if (!selectedNode) return null
 
   const handleTraceroute = () => {
     if (selectedNode.id) {
-      // Clear old traceroute result before sending new one
+      // Clear old traceroute result and timeout state
       setTracerouteResult(null)
+      setTracerouteTimeout(false)
+
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+
       traceroute.mutate(selectedNode.id)
+
+      // Set timeout for 45 seconds
+      timeoutRef.current = setTimeout(() => {
+        if (!tracerouteResult || tracerouteResult.from !== selectedNode.id) {
+          setTracerouteTimeout(true)
+        }
+      }, 45000)
     }
   }
+
+  // Clear timeout when result arrives
+  useEffect(() => {
+    if (tracerouteResult && tracerouteResult.from === selectedNode.id) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      setTracerouteTimeout(false)
+    }
+  }, [tracerouteResult, selectedNode.id])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   // Check if traceroute result is for the currently selected node
   const isTracerouteForThisNode = tracerouteResult && tracerouteResult.from === selectedNode.id
@@ -37,6 +74,27 @@ export function NodeInfoPanel() {
   const getRouteNodeName = (num: number) => {
     const node = nodes.find((n) => n.num === num)
     return node ? getNodeName(node) : `!${num.toString(16).padStart(8, '0')}`
+  }
+
+  // Build full route with source and destination
+  const buildFullRoute = (intermediateHops: number[]) => {
+    const myNode = nodes.find(n => n.id === status.my_node_id)
+    const fullRoute: Array<{num: number, name: string, isSource?: boolean, isDest?: boolean}> = []
+
+    // Add source (my node)
+    if (myNode) {
+      fullRoute.push({ num: myNode.num, name: getNodeName(myNode), isSource: true })
+    }
+
+    // Add intermediate hops
+    intermediateHops.forEach(hopNum => {
+      fullRoute.push({ num: hopNum, name: getRouteNodeName(hopNum) })
+    })
+
+    // Add destination
+    fullRoute.push({ num: selectedNode.num, name: getNodeName(selectedNode), isDest: true })
+
+    return fullRoute
   }
 
   return (
@@ -153,28 +211,83 @@ export function NodeInfoPanel() {
             Traceroute
           </Button>
 
+          {/* Timeout message */}
+          {tracerouteTimeout && !isTracerouteForThisNode && (
+            <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="w-4 h-4" />
+                <span>No response received (timeout after 45s)</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Node may be offline or unreachable
+              </p>
+            </div>
+          )}
+
+          {/* Traceroute result */}
           {isTracerouteForThisNode && (
-            <div className="mt-3 p-3 bg-secondary/50 rounded-lg">
-              <div className="text-xs text-muted-foreground uppercase mb-2">
-                Route to {selectedNode.id}
-              </div>
-              <div className="space-y-1">
-                {tracerouteResult.route.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Direct connection</p>
-                ) : (
-                  tracerouteResult.route.map((hop, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <span className="text-muted-foreground">{i + 1}.</span>
-                      <span>{getRouteNodeName(hop)}</span>
-                      {tracerouteResult.snr_towards[i] !== undefined && (
-                        <span className="text-xs text-muted-foreground ml-auto">
-                          SNR: {tracerouteResult.snr_towards[i].toFixed(1)}
+            <div className="mt-3 space-y-3">
+              {/* Direct connection message */}
+              {tracerouteResult.route.length === 0 && (
+                <div className="p-3 bg-secondary/50 rounded-lg">
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Signal className="w-4 h-4" />
+                    <span>Direct connection (no intermediate hops)</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Forward route */}
+              {tracerouteResult.route.length > 0 && (
+                <div className="p-3 bg-secondary/50 rounded-lg">
+                  <div className="text-xs text-muted-foreground uppercase mb-2 flex items-center gap-2">
+                    <span>→ Route to destination</span>
+                  </div>
+                  <div className="space-y-1">
+                    {buildFullRoute(tracerouteResult.route).map((hop, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">{i + 1}.</span>
+                        <span className={hop.isSource ? "font-semibold text-primary" : hop.isDest ? "font-semibold text-primary" : ""}>
+                          {hop.name}
                         </span>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                        {hop.isSource && <span className="text-xs text-muted-foreground">(you)</span>}
+                        {hop.isDest && <span className="text-xs text-muted-foreground">(target)</span>}
+                        {!hop.isSource && !hop.isDest && tracerouteResult.snr_towards[i - 1] !== undefined && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            SNR: {tracerouteResult.snr_towards[i - 1].toFixed(1)} dB
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Return route (if different) */}
+              {tracerouteResult.route_back && tracerouteResult.route_back.length > 0 && (
+                <div className="p-3 bg-secondary/50 rounded-lg">
+                  <div className="text-xs text-muted-foreground uppercase mb-2 flex items-center gap-2">
+                    <span>← Return route</span>
+                  </div>
+                  <div className="space-y-1">
+                    {buildFullRoute(tracerouteResult.route_back.slice().reverse()).map((hop, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">{i + 1}.</span>
+                        <span className={hop.isSource ? "font-semibold text-primary" : hop.isDest ? "font-semibold text-primary" : ""}>
+                          {hop.name}
+                        </span>
+                        {hop.isSource && <span className="text-xs text-muted-foreground">(you)</span>}
+                        {hop.isDest && <span className="text-xs text-muted-foreground">(target)</span>}
+                        {!hop.isSource && !hop.isDest && tracerouteResult.snr_back[tracerouteResult.route_back.length - i] !== undefined && (
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            SNR: {tracerouteResult.snr_back[tracerouteResult.route_back.length - i].toFixed(1)} dB
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

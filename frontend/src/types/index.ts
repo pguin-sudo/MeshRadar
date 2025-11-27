@@ -53,6 +53,7 @@ export interface TracerouteResult {
   request_id: number
   from: string
   route: number[]
+  route_back: number[]
   snr_towards: number[]
   snr_back: number[]
 }

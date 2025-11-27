@@ -10,6 +10,17 @@ export function Sidebar() {
   const { data: nodes } = useNodes()
   const { data: channels } = useChannels()
 
+  const formatLastHeard = (timestamp?: number) => {
+    if (!timestamp) return ''
+    const now = Date.now()
+    const diff = Math.floor((now - timestamp * 1000) / 1000)
+
+    if (diff < 60) return `${diff}s`
+    if (diff < 3600) return `${Math.floor(diff / 60)}m`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+    return `${Math.floor(diff / 86400)}d`
+  }
+
   return (
     <div className="w-72 bg-card border-r border-border flex flex-col h-full">
       <div className="p-4 border-b border-border">
@@ -77,14 +88,19 @@ export function Sidebar() {
                     'bg-accent'
                 )}
               >
-                <User className="w-4 h-4 text-muted-foreground" />
+                <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <div className="flex-1 text-left min-w-0">
                   <div className="truncate">{getNodeName(node)}</div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {node.id}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="truncate">{node.id}</span>
+                    {node.lastHeard && (
+                      <span className="text-muted-foreground/60">
+                        {formatLastHeard(node.lastHeard)}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <div className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground flex-shrink-0">
                   {node.deviceMetrics?.batteryLevel !== undefined && (
                     <span className="flex items-center">
                       <Battery className="w-3 h-3 mr-0.5" />

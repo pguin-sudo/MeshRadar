@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Wifi, Usb, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,12 +7,26 @@ import { useMeshStore } from '@/store'
 import { cn } from '@/lib/utils'
 
 export function ConnectionPanel() {
-  const [type, setType] = useState<'tcp' | 'serial'>('tcp')
-  const [address, setAddress] = useState('192.168.1.1')
+  const [type, setType] = useState<'tcp' | 'serial'>(() => {
+    return (localStorage.getItem('meshtastic_connection_type') as 'tcp' | 'serial') || 'tcp'
+  })
+  const [address, setAddress] = useState(() => {
+    return localStorage.getItem('meshtastic_last_address') || '192.168.1.1'
+  })
   const status = useMeshStore((s) => s.status)
 
   const connect = useConnect()
   const disconnect = useDisconnect()
+
+  // Save last used address and type to localStorage
+  useEffect(() => {
+    if (status.connected && status.address) {
+      localStorage.setItem('meshtastic_last_address', status.address)
+      if (status.connection_type) {
+        localStorage.setItem('meshtastic_connection_type', status.connection_type)
+      }
+    }
+  }, [status.connected, status.address, status.connection_type])
 
   const handleConnect = () => {
     connect.mutate({ type, address })
