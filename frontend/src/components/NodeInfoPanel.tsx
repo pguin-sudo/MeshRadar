@@ -114,6 +114,7 @@ type TraceMapPoint = {
 type TraceMapSegment = {
   coords: [number, number][]
   direction: 'forward' | 'back'
+  approximate?: boolean
 }
 
 function TraceRouteMap({
@@ -133,30 +134,34 @@ function TraceRouteMap({
   const mapRef = useRef<MapLibreMap | null>(null)
   const id = useId().replace(/:/g, '')
 
-  const geoData = useMemo(
-    () => ({
-      type: 'FeatureCollection' as const,
-      features: [
-        ...segments.map((seg) => ({
-          type: 'Feature' as const,
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: seg.coords,
-          },
-          properties: { direction: seg.direction },
-        })),
-        ...points.map((p) => ({
-          type: 'Feature' as const,
-          geometry: { type: 'Point' as const, coordinates: [p.lon, p.lat] },
-          properties: { role: p.role, name: p.name },
-        })),
-      ],
-    }),
-    [points, segments]
-  )
+  const geoData = useMemo(() => {
+    const features: any[] = []
+
+    segments.forEach((seg) => {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: seg.coords,
+        },
+        properties: { direction: seg.direction, approximate: !!seg.approximate },
+      })
+    })
+
+    points.forEach((p) => {
+      if (!p.hasCoords) return
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+        properties: { role: p.role, name: p.name },
+      })
+    })
+
+    return { type: 'FeatureCollection', features }
+  }, [points, segments])
 
   const bounds = useMemo(() => {
-    const coords = points.map((p) => [p.lon, p.lat]) as [number, number][]
+    const coords = points.filter((p) => p.hasCoords).map((p) => [p.lon, p.lat]) as [number, number][]
     if (coords.length === 0) return null
     const lons = coords.map((c) => c[0])
     const lats = coords.map((c) => c[1])
@@ -195,7 +200,7 @@ function TraceRouteMap({
         id: `${id}-line-forward`,
         type: 'line',
         source: `${id}-trace`,
-        filter: ['==', ['get', 'direction'], 'forward'],
+        filter: ['all', ['==', ['get', 'direction'], 'forward'], ['!', ['get', 'approximate']]],
         paint: {
           'line-color': '#2563eb',
           'line-width': 3,
@@ -207,12 +212,25 @@ function TraceRouteMap({
         id: `${id}-line-back`,
         type: 'line',
         source: `${id}-trace`,
-        filter: ['==', ['get', 'direction'], 'back'],
+        filter: ['all', ['==', ['get', 'direction'], 'back'], ['!', ['get', 'approximate']]],
         paint: {
           'line-color': '#16a34a',
           'line-width': 3,
           'line-opacity': 0.7,
           'line-dasharray': [2, 2],
+        },
+      })
+
+      map.addLayer({
+        id: `${id}-line-approx`,
+        type: 'line',
+        source: `${id}-trace`,
+        filter: ['==', ['get', 'approximate'], true],
+        paint: {
+          'line-color': '#94a3b8',
+          'line-width': 2.5,
+          'line-opacity': 0.8,
+          'line-dasharray': [1.5, 1.5],
         },
       })
 
@@ -286,6 +304,7 @@ export function NodeInfoPanel() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [tracerouteInProgress, setTracerouteInProgress] = useState(false)
+  const tracerouteInProgressRef = useRef(false)
   const [isMapOpen, setIsMapOpen] = useState(false)
   const [isTraceMapOpen, setIsTraceMapOpen] = useState(false)
 
@@ -298,6 +317,7 @@ export function NodeInfoPanel() {
       setTracerouteTimeout(false)
       setTracerouteCountdown(60)
       setTracerouteInProgress(true)
+      tracerouteInProgressRef.current = true
 
       // Clear any existing timeout
       if (timeoutRef.current) {
@@ -311,9 +331,13 @@ export function NodeInfoPanel() {
 
       // Set timeout for 60 seconds
       timeoutRef.current = setTimeout(() => {
-        if (!tracerouteResult || tracerouteResult.from !== selectedNode.id) {
-          setTracerouteTimeout(true)
-          setTracerouteInProgress(false)
+        if (!tracerouteInProgressRef.current) return
+        setTracerouteTimeout(true)
+        setTracerouteInProgress(false)
+        tracerouteInProgressRef.current = false
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current)
+          countdownIntervalRef.current = null
         }
       }, 60000)
 
@@ -321,6 +345,7 @@ export function NodeInfoPanel() {
         setTracerouteCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(countdownIntervalRef.current as ReturnType<typeof setInterval>)
+            countdownIntervalRef.current = null
             return 0
           }
           return prev - 1
@@ -343,6 +368,7 @@ export function NodeInfoPanel() {
       setTracerouteTimeout(false)
       setTracerouteCountdown(60)
       setTracerouteInProgress(false)
+      tracerouteInProgressRef.current = false
     }
   }, [tracerouteResult, selectedNode.id])
 
@@ -356,6 +382,7 @@ export function NodeInfoPanel() {
         clearInterval(countdownIntervalRef.current)
       }
       setTracerouteInProgress(false)
+      tracerouteInProgressRef.current = false
     }
   }, [])
 
@@ -444,7 +471,8 @@ export function NodeInfoPanel() {
         return coords
       }
 
-      let lastCoord: { lat: number; lon: number } | null = null
+      let lastKnown: { lat: number; lon: number } | null = null
+      let gap = false
 
       sequence.forEach((entry) => {
         hopIndex += 1
@@ -461,20 +489,26 @@ export function NodeInfoPanel() {
             order: hopIndex,
           })
           unknown += 1
-          lastCoord = null
+          gap = true
           return
         }
         const coords = addPoint(entry.node, entry.role)
-        if (coords && lastCoord) {
+        if (coords && lastKnown) {
           segments.push({
             coords: [
-              [lastCoord.lon, lastCoord.lat],
+              [lastKnown.lon, lastKnown.lat],
               [coords.lon, coords.lat],
             ],
             direction,
+            approximate: gap,
           })
         }
-        lastCoord = coords
+        if (coords) {
+          lastKnown = coords
+          gap = false
+        } else {
+          gap = true
+        }
       })
 
       return { points, segments, unknown }
@@ -777,7 +811,7 @@ export function NodeInfoPanel() {
               )}
 
               {/* Map preview */}
-              {traceMapData && (traceMapData.pointsForward.length + traceMapData.pointsBack.length) >= 2 && (
+              {traceMapData && (
                 <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs text-muted-foreground uppercase">
@@ -788,15 +822,21 @@ export function NodeInfoPanel() {
                       Open map
                     </Button>
                   </div>
-                  <div className="rounded-lg overflow-hidden border border-border/60">
-                    <TraceRouteMap
-                      points={[...traceMapData.pointsForward, ...traceMapData.pointsBack]}
-                      segments={traceMapData.segments}
-                      interactive={false}
-                      showAttribution={false}
-                      className="h-48"
-                    />
-                  </div>
+                  {traceMapData.segments.length > 0 ? (
+                    <div className="rounded-lg overflow-hidden border border-border/60">
+                      <TraceRouteMap
+                        points={[...traceMapData.pointsForward, ...traceMapData.pointsBack]}
+                        segments={traceMapData.segments}
+                        interactive={false}
+                        showAttribution={false}
+                        className="h-48"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-border/60 bg-card/80 p-3 text-xs text-muted-foreground">
+                      Нет координат для отображения маршрута на карте, но список хопов ниже.
+                    </div>
+                  )}
                   <div className="text-xs text-muted-foreground space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="inline-flex items-center gap-1">
@@ -805,6 +845,11 @@ export function NodeInfoPanel() {
                       <span className="inline-flex items-center gap-1">
                         <span className="inline-block w-3 h-1.5 bg-green-600 rounded-sm border border-border" /> обратный маршрут (пунктир)
                       </span>
+                      {traceMapData.segments.some((s) => s.approximate) && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="inline-block w-3 h-1.5 bg-slate-400 rounded-sm border border-border" /> участок с неизвестными хопами
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1">
                         <span className="inline-block w-3 h-3 rounded-full bg-blue-600" /> начало
                       </span>
@@ -945,6 +990,11 @@ export function NodeInfoPanel() {
                           <span className="inline-flex items-center gap-1">
                             <span className="inline-block w-3 h-1.5 bg-green-600 rounded-sm border border-border" /> обратный маршрут (пунктир)
                           </span>
+                          {traceMapData.segments.some((s) => s.approximate) && (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block w-3 h-1.5 bg-slate-400 rounded-sm border border-border" /> участок с неизвестными хопами
+                            </span>
+                          )}
                           <span className="inline-flex items-center gap-1">
                             <span className="inline-block w-3 h-3 rounded-full bg-blue-600" /> начало
                           </span>

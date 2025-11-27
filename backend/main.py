@@ -1,5 +1,8 @@
 import asyncio
 import logging
+import json
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -175,7 +178,7 @@ async def traceroute(node_id: str, request: TracerouteRequest = TracerouteReques
 
     logger.info(f"Traceroute request received for {node_id}")
 
-    async def _send_traceroute():
+    async def _send_traceroute_thread():
         try:
             success = await asyncio.wait_for(
                 asyncio.to_thread(
@@ -188,12 +191,14 @@ async def traceroute(node_id: str, request: TracerouteRequest = TracerouteReques
             )
             if not success:
                 logger.error("Traceroute send returned False")
+            else:
+                logger.info("Traceroute send scheduled successfully")
         except asyncio.TimeoutError:
-            logger.warning("Traceroute send timed out (background)")
+            logger.warning("Traceroute send timed out (background thread)")
         except Exception as e:
             logger.error(f"Traceroute send failed: {e}")
 
-    asyncio.create_task(_send_traceroute())
+    asyncio.create_task(_send_traceroute_thread())
 
     logger.info(f"Traceroute request sent, waiting for response via WebSocket")
     return {"success": True, "message": "Traceroute initiated"}
