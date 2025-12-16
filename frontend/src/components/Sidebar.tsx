@@ -16,7 +16,7 @@ import { cn, getNodeName } from '@/lib/utils'
 type SortType = 'name' | 'lastHeard'
 
 export function Sidebar() {
-  const { currentChat, setCurrentChat, setSelectedNode, status, getUnreadForChat } = useMeshStore()
+  const { currentChat, setActiveTab, setSelectedNode, status, getUnreadForChat } = useMeshStore()
   const { data: nodes } = useNodes()
   const { data: channels } = useChannels()
   const [sortBy, setSortBy] = useState<SortType>('name')
@@ -76,7 +76,7 @@ export function Sidebar() {
       key={node.id || node.num}
       onClick={() => {
         setSelectedNode(node)
-        setCurrentChat({
+        setActiveTab({
           type: 'dm',
           nodeId: node.id,
           name: getNodeName(node),
@@ -151,7 +151,7 @@ export function Sidebar() {
                 <button
                   key={channel.index}
                   onClick={() =>
-                    setCurrentChat({
+                    setActiveTab({
                       type: 'channel',
                       index: channel.index,
                       name: channel.name,

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageBubble } from './MessageBubble'
+import { ChatTabs } from './ChatTabs'
 import { useMeshStore } from '@/store'
 import { useSendMessage, useMessages } from '@/hooks/useApi'
 
@@ -104,10 +105,13 @@ export function ChatArea() {
 
   if (!status.connected) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <p className="text-lg mb-2">Not connected</p>
-          <p className="text-sm">Connect to a Meshtastic node to start chatting</p>
+      <div className="flex-1 flex flex-col h-full">
+        <ChatTabs />
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <p className="text-lg mb-2">Not connected</p>
+            <p className="text-sm">Connect to a Meshtastic node to start chatting</p>
+          </div>
         </div>
       </div>
     )
@@ -115,10 +119,13 @@ export function ChatArea() {
 
   if (!currentChat) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <p className="text-lg mb-2">Select a channel or node</p>
-          <p className="text-sm">Choose from the sidebar to start messaging</p>
+      <div className="flex-1 flex flex-col h-full">
+        <ChatTabs />
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <p className="text-lg mb-2">Select a channel or node</p>
+            <p className="text-sm">Choose from the sidebar to start messaging</p>
+          </div>
         </div>
       </div>
     )
@@ -126,6 +133,9 @@ export function ChatArea() {
 
   return (
     <div className="flex-1 flex flex-col h-full">
+      {/* Tabs */}
+      <ChatTabs />
+
       {/* Header */}
       <div className="h-14 px-4 border-b border-border flex items-center gap-3 bg-card/50">
         {currentChat.type === 'channel' ? (

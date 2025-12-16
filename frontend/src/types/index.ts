@@ -66,3 +66,8 @@ export interface WSMessage {
 export type ChatTarget =
   | { type: 'channel'; index: number; name: string }
   | { type: 'dm'; nodeId: string; name: string }
+
+export interface OpenTab {
+  id: string // unique key: "channel:0" or "dm:!abc123"
+  target: ChatTarget
+}

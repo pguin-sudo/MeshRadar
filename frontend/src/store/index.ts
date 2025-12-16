@@ -1,5 +1,11 @@
 import { create } from 'zustand'
-import type { Node, Channel, Message, ConnectionStatus, ChatTarget, TracerouteResult } from '@/types'
+import { persist } from 'zustand/middleware'
+import type { Node, Channel, Message, ConnectionStatus, ChatTarget, TracerouteResult, OpenTab } from '@/types'
+
+// Helper to generate tab id from ChatTarget
+export function getChatKey(target: ChatTarget): string {
+  return target.type === 'channel' ? `channel:${target.index}` : `dm:${target.nodeId}`
+}
 
 interface MeshState {
   // Connection
@@ -43,9 +49,17 @@ interface MeshState {
   incrementUnreadForChat: (chatKey: string) => void
   resetUnreadForChat: (chatKey: string) => void
   getUnreadForChat: (chatKey: string) => number
+
+  // Open tabs (persisted in localStorage)
+  openTabs: OpenTab[]
+  addTab: (target: ChatTarget) => void
+  removeTab: (tabId: string) => void
+  setActiveTab: (target: ChatTarget) => void
 }
 
-export const useMeshStore = create<MeshState>((set, get) => ({
+export const useMeshStore = create<MeshState>()(
+  persist(
+    (set, get) => ({
   status: { connected: false },
   setStatus: (status) => set({ status }),
 
@@ -134,4 +148,47 @@ export const useMeshStore = create<MeshState>((set, get) => ({
   getUnreadForChat: (chatKey: string): number => {
     return get().unreadPerChat[chatKey] || 0
   },
-}))
+
+  // Tabs management
+  openTabs: [],
+  addTab: (target) =>
+    set((state) => {
+      const tabId = getChatKey(target)
+      // Don't add if already exists
+      if (state.openTabs.some((t) => t.id === tabId)) {
+        return state
+      }
+      return {
+        openTabs: [...state.openTabs, { id: tabId, target }],
+      }
+    }),
+  removeTab: (tabId) =>
+    set((state) => {
+      const newTabs = state.openTabs.filter((t) => t.id !== tabId)
+      // If closing current tab, switch to last remaining tab or null
+      const currentKey = state.currentChat ? getChatKey(state.currentChat) : null
+      if (currentKey === tabId) {
+        const lastTab = newTabs[newTabs.length - 1]
+        return {
+          openTabs: newTabs,
+          currentChat: lastTab ? lastTab.target : null,
+        }
+      }
+      return { openTabs: newTabs }
+    }),
+  setActiveTab: (target) =>
+    set((state) => {
+      const tabId = getChatKey(target)
+      // Add tab if not exists, then set as current
+      const exists = state.openTabs.some((t) => t.id === tabId)
+      return {
+        openTabs: exists ? state.openTabs : [...state.openTabs, { id: tabId, target }],
+        currentChat: target,
+      }
+    }),
+  }),
+  {
+    name: 'meshtastic-tabs',
+    partialize: (state) => ({ openTabs: state.openTabs }),
+  }
+))

@@ -101,7 +101,28 @@ export function useWebSocket() {
               store.incrementUnreadForChat(chatKey)
             }
 
+            // Auto-create tab for new messages
             if (!isFromSelf) {
+              if (isDM) {
+                // Find sender node to get name
+                const senderNode = store.nodes.find((n) => n.id === data.sender)
+                const senderName = senderNode?.user?.longName || senderNode?.user?.shortName || data.sender
+                store.addTab({
+                  type: 'dm',
+                  nodeId: data.sender,
+                  name: senderName,
+                })
+              } else {
+                // Find channel to get name
+                const channel = store.channels.find((c) => c.index === data.channel)
+                const channelName = channel?.name || `Channel ${data.channel}`
+                store.addTab({
+                  type: 'channel',
+                  index: data.channel,
+                  name: channelName,
+                })
+              }
+
               playNotification()
             }
             break
