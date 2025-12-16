@@ -12,7 +12,7 @@ export function ChatTabs() {
   const currentKey = currentChat ? getChatKey(currentChat) : null
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1.5 min-h-[40px] border-b border-border bg-muted/30 overflow-x-auto">
+    <div className="flex items-end gap-0 px-2 pt-2 min-h-[44px] bg-muted/50 overflow-x-auto">
       {openTabs.map((tab) => {
         const isActive = tab.id === currentKey
         const unreadCount = unreadPerChat[tab.id] || 0
@@ -21,11 +21,11 @@ export function ChatTabs() {
           <div
             key={tab.id}
             className={cn(
-              'group flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer transition-colors text-sm',
-              'hover:bg-accent/50',
+              'group flex items-center gap-1.5 px-3 py-2 cursor-pointer transition-all text-sm relative',
+              'rounded-t-lg border border-b-0',
               isActive
-                ? 'bg-background shadow-sm border border-border'
-                : 'text-muted-foreground'
+                ? 'bg-background border-border text-foreground z-10 -mb-px'
+                : 'bg-muted/50 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
             onClick={() => setActiveTab(tab.target)}
           >
@@ -61,6 +61,8 @@ export function ChatTabs() {
           </div>
         )
       })}
+      {/* Bottom border line */}
+      <div className="flex-1 border-b border-border self-end h-0" />
     </div>
   )
 }
