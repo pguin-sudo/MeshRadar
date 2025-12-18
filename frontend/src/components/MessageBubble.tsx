@@ -1,6 +1,6 @@
 import { Check, CheckCheck, X, Clock } from 'lucide-react'
 import type { Message } from '@/types'
-import { cn, formatTime, getNodeName } from '@/lib/utils'
+import { cn, formatTime } from '@/lib/utils'
 import { useMeshStore } from '@/store'
 
 interface Props {
@@ -13,7 +13,6 @@ export function MessageBubble({ message }: Props) {
 
   const isOutgoing = message.is_outgoing || message.sender === status.my_node_id
   const senderNode = nodes.find((n) => n.id === message.sender)
-  const senderName = isOutgoing ? 'You' : getNodeName(senderNode || { id: message.sender })
 
   const AckIcon = () => {
     switch (message.ack_status) {
@@ -40,22 +39,30 @@ export function MessageBubble({ message }: Props) {
         isOutgoing ? 'ml-auto items-end' : 'mr-auto items-start'
       )}
     >
-      {!isOutgoing && (
-        <span className="text-xs text-muted-foreground mb-1 px-1">
-          {senderName}
-        </span>
-      )}
-
       <div className="relative group">
         <div
           className={cn(
-            'rounded-2xl px-4 py-2 break-words',
+            'rounded-2xl px-3 py-2 break-words flex flex-col gap-1',
             isOutgoing
               ? 'bg-primary text-primary-foreground rounded-br-sm'
               : 'bg-secondary text-secondary-foreground rounded-bl-sm'
           )}
         >
-          <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+          {/* Sender Header */}
+          <div className="flex items-center gap-1.5 opacity-90 mb-0.5">
+            {senderNode?.user?.shortName && (
+              <span className={cn(
+                "px-1 py-0 rounded border text-[9px] font-bold tracking-wider uppercase leading-tight",
+                isOutgoing ? "border-primary-foreground/30 bg-primary-foreground/10" : "border-foreground/20 bg-foreground/5"
+              )}>
+                {senderNode.user.shortName}
+              </span>
+            )}
+            <span className="font-bold text-[11px] truncate leading-tight">
+              {isOutgoing ? 'You' : (senderNode?.user?.longName || message.sender)}
+            </span>
+          </div>
+          <p className="text-sm whitespace-pre-wrap leading-snug">{message.text}</p>
         </div>
 
         {/* Reactions - attached to bottom right */}
