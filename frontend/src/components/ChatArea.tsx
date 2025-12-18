@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Send, Hash, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -74,6 +74,49 @@ export function ChatArea() {
     )
   })
 
+  // Detect and group reactions
+  // Regex for a string containing ONLY emojis (and optional whitespace)
+  // Using a simplified robust range for common emojis + newer ones
+  const EMOJI_ONLY_REGEX = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\s)+$/u
+
+  const processedMessages = useMemo(() => {
+    const result: typeof messages = []
+
+    // Sort by timestamp to ensure correct order
+    const sorted = [...filteredMessages].sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+
+    sorted.forEach((msg) => {
+      const isEmoji = EMOJI_ONLY_REGEX.test(msg.text.trim())
+
+      if (isEmoji && result.length > 0) {
+        // It's a reaction to the previous message
+        const target = result[result.length - 1]
+
+        // Ensure reactions object exists (clone target first to avoid mutation)
+        // actually we can mutate the object in the result array since it's a shallow copy from our new array
+        if (!target.reactions) target.reactions = {}
+
+        const emoji = msg.text.trim()
+
+        // Clean up emoji (remove potential extra spaces)
+        // You might want to split if multiple emojis? For now assume single string is the reaction.
+        // If user sends "👍 ❤️", treating it as one reaction "👍 ❤️" is okay for now.
+
+        if (!target.reactions[emoji]) target.reactions[emoji] = []
+        if (!target.reactions[emoji].includes(msg.sender)) {
+          target.reactions[emoji].push(msg.sender)
+        }
+      } else {
+        // Regular message
+        result.push({ ...msg, reactions: {} })
+      }
+    })
+
+    return result
+  }, [filteredMessages])
+
   // Auto-scroll to bottom
   useEffect(() => {
     const viewport = scrollViewportRef.current
@@ -82,7 +125,7 @@ export function ChatArea() {
     requestAnimationFrame(() => {
       viewport.scrollTop = viewport.scrollHeight
     })
-  }, [filteredMessages.length, chatKey])
+  }, [processedMessages.length, chatKey])
 
   const handleSend = () => {
     if (!text.trim() || !currentChat) return
@@ -153,12 +196,12 @@ export function ChatArea() {
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4" viewportRef={scrollViewportRef}>
-        {filteredMessages.length === 0 ? (
+        {processedMessages.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
             No messages yet. Start the conversation!
           </div>
         ) : (
-          filteredMessages.map((message) => (
+          processedMessages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))
         )}

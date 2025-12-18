@@ -45,16 +45,43 @@ export function MessageBubble({ message }: Props) {
           {senderName}
         </span>
       )}
-      <div
-        className={cn(
-          'rounded-2xl px-4 py-2 break-words',
-          isOutgoing
-            ? 'bg-primary text-primary-foreground rounded-br-sm'
-            : 'bg-secondary text-secondary-foreground rounded-bl-sm'
+
+      <div className="relative group">
+        <div
+          className={cn(
+            'rounded-2xl px-4 py-2 break-words',
+            isOutgoing
+              ? 'bg-primary text-primary-foreground rounded-br-sm'
+              : 'bg-secondary text-secondary-foreground rounded-bl-sm'
+          )}
+        >
+          <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+        </div>
+
+        {/* Reactions - attached to bottom right */}
+        {message.reactions && Object.keys(message.reactions).length > 0 && (
+          <div className={cn(
+            "absolute -bottom-2 -right-3 flex flex-wrap gap-0.5 justify-end z-10",
+            isOutgoing ? "translate-y-1/2" : "translate-y-1/2"
+          )}>
+            {Object.entries(message.reactions).map(([emoji, senders]) => (
+              <div
+                key={emoji}
+                className="rounded-full px-1 py-0.5 text-lg flex items-center gap-0.5 cursor-default hover:scale-110 transition-transform"
+                title={senders.join(', ')}
+              >
+                <span>{emoji}</span>
+                {senders.length > 1 && (
+                  <span className="text-muted-foreground font-medium text-[10px]">
+                    {senders.length}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         )}
-      >
-        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
       </div>
+
       <div className="flex items-center gap-1 px-1 mt-0.5">
         <span className="text-xs text-muted-foreground">
           {formatTime(message.timestamp)}
