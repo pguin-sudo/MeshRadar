@@ -439,9 +439,22 @@ export function NodeInfoPanel() {
   const traceMapData = useMemo(() => {
     if (!isTracerouteForThisNode || !tracerouteResult) return null
 
-    const myNode = nodes.find(
-      (n) => n.id === status.my_node_id || (status.my_node_num && n.num === status.my_node_num)
-    )
+    // Improved node finding helper
+    const findNodeByIdOrNum = (id?: string | null, num?: number | null) => {
+      if (!id && !num) return null
+      return nodes.find((n) =>
+        (id && n.id?.toLowerCase() === id.toLowerCase()) ||
+        (num !== undefined && num !== null && num !== 0 && n.num === num)
+      )
+    }
+
+    const myNodeFromStore = findNodeByIdOrNum(status.my_node_id, status.my_node_num)
+    const myNode = myNodeFromStore || (status.my_node_id ? {
+      id: status.my_node_id,
+      num: status.my_node_num || 0,
+      user: { longName: 'Me (Local Node)', shortName: 'Me', hwModel: '', id: status.my_node_id },
+      num_actual: status.my_node_num
+    } : null)
 
     const buildPath = (routeNums: number[], direction: 'forward' | 'back') => {
       const startNode = direction === 'forward' ? myNode : selectedNode
@@ -451,7 +464,7 @@ export function NodeInfoPanel() {
       sequence.push({ node: startNode || null, role: 'source' })
 
       for (const num of routeNums) {
-        const hopNode = nodes.find((n) => n.num === num) || null
+        const hopNode = findNodeByIdOrNum(null, num) || null
         sequence.push({ node: hopNode, role: 'hop' })
       }
 
@@ -568,22 +581,44 @@ export function NodeInfoPanel() {
   ])
 
   // Build full route with source and destination
-  const buildFullRoute = (intermediateHops: number[]) => {
-    const myNode = nodes.find(n => n.id === status.my_node_id)
-    const fullRoute: Array<{num: number, name: string, isSource?: boolean, isDest?: boolean}> = []
-
-    // Add source (my node)
-    if (myNode) {
-      fullRoute.push({ num: myNode.num, name: getNodeName(myNode), isSource: true })
+  const buildFullRoute = (intermediateHops: number[], direction: 'forward' | 'back' = 'forward') => {
+    // Re-use logic for finding/synthesizing myNode
+    const findNodeByIdOrNum = (id?: string | null, num?: number | null) => {
+      if (!id && !num) return null
+      return nodes.find((n) =>
+        (id && n.id?.toLowerCase() === id.toLowerCase()) ||
+        (num !== undefined && num !== null && num !== 0 && n.num === num)
+      )
     }
 
-    // Add intermediate hops
-    intermediateHops.forEach(hopNum => {
-      fullRoute.push({ num: hopNum, name: getRouteNodeName(hopNum) })
-    })
+    const myNodeFromStore = findNodeByIdOrNum(status.my_node_id, status.my_node_num)
+    const myNode = myNodeFromStore || (status.my_node_id ? {
+      id: status.my_node_id,
+      num: status.my_node_num || 0,
+      user: { longName: 'Me (Local Node)', shortName: 'Me', hwModel: '', id: status.my_node_id }
+    } : null)
+    const fullRoute: Array<{ num: number, name: string, isSource?: boolean, isDest?: boolean }> = []
 
-    // Add destination
-    fullRoute.push({ num: selectedNode.num, name: getNodeName(selectedNode), isDest: true })
+    if (direction === 'forward') {
+      // Source (Me) -> Hops -> Destination (Target)
+      if (myNode) {
+        fullRoute.push({ num: myNode.num, name: getNodeName(myNode), isSource: true })
+      }
+      intermediateHops.forEach(hopNum => {
+        fullRoute.push({ num: hopNum, name: getRouteNodeName(hopNum) })
+      })
+      fullRoute.push({ num: selectedNode.num, name: getNodeName(selectedNode), isDest: true })
+    } else {
+      // Source (Target) -> Hops -> Destination (Me)
+      fullRoute.push({ num: selectedNode.num, name: getNodeName(selectedNode), isDest: true })
+      // route_back is usually in return order (Target -> Hops -> Me)
+      intermediateHops.forEach(hopNum => {
+        fullRoute.push({ num: hopNum, name: getRouteNodeName(hopNum) })
+      })
+      if (myNode) {
+        fullRoute.push({ num: myNode.num, name: getNodeName(myNode), isSource: true })
+      }
+    }
 
     return fullRoute
   }
@@ -804,10 +839,10 @@ export function NodeInfoPanel() {
                         {!hop.isSource && !hop.isDest &&
                           typeof tracerouteResult.snr_towards[i - 1] === 'number' &&
                           !Number.isNaN(tracerouteResult.snr_towards[i - 1]) && (
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            SNR: {tracerouteResult.snr_towards[i - 1].toFixed(1)} dB
-                          </span>
-                        )}
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              SNR: {tracerouteResult.snr_towards[i - 1].toFixed(1)} dB
+                            </span>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -821,7 +856,7 @@ export function NodeInfoPanel() {
                     <span>← Return route</span>
                   </div>
                   <div className="space-y-1">
-                    {buildFullRoute(tracerouteResult.route_back.slice().reverse()).map((hop, i) => (
+                    {buildFullRoute(tracerouteResult.route_back, 'back').map((hop, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">{i + 1}.</span>
                         <span className={hop.isSource ? "font-semibold text-primary" : hop.isDest ? "font-semibold text-primary" : ""}>
@@ -830,12 +865,12 @@ export function NodeInfoPanel() {
                         {hop.isSource && <span className="text-xs text-muted-foreground">(you)</span>}
                         {hop.isDest && <span className="text-xs text-muted-foreground">(target)</span>}
                         {!hop.isSource && !hop.isDest &&
-                          typeof tracerouteResult.snr_back[tracerouteResult.route_back.length - i] === 'number' &&
-                          !Number.isNaN(tracerouteResult.snr_back[tracerouteResult.route_back.length - i]) && (
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            SNR: {tracerouteResult.snr_back[tracerouteResult.route_back.length - i].toFixed(1)} dB
-                          </span>
-                        )}
+                          typeof tracerouteResult.snr_back[i - 1] === 'number' &&
+                          !Number.isNaN(tracerouteResult.snr_back[i - 1]) && (
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              SNR: {tracerouteResult.snr_back[i - 1].toFixed(1)} dB
+                            </span>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -996,145 +1031,145 @@ export function NodeInfoPanel() {
                   )}
 
                   <Dialog.Root open={isTraceMapOpen} onOpenChange={setIsTraceMapOpen}>
-                  <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-                    <Dialog.Content className="fixed left-1/2 top-1/2 w-[92vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-card p-4 shadow-xl border border-border focus:outline-none">
-                      <Dialog.Title className="sr-only">Маршрут сообщения</Dialog.Title>
-                      <Dialog.Description className="sr-only">
-                        Отображение маршрута трассировки на карте
-                      </Dialog.Description>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="font-semibold text-base flex items-center gap-2">
-                          <MapIcon className="w-4 h-4" />
-                          Маршрут сообщения
+                    <Dialog.Portal>
+                      <Dialog.Overlay className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
+                      <Dialog.Content className="fixed left-1/2 top-1/2 w-[92vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-card p-4 shadow-xl border border-border focus:outline-none">
+                        <Dialog.Title className="sr-only">Маршрут сообщения</Dialog.Title>
+                        <Dialog.Description className="sr-only">
+                          Отображение маршрута трассировки на карте
+                        </Dialog.Description>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="font-semibold text-base flex items-center gap-2">
+                            <MapIcon className="w-4 h-4" />
+                            Маршрут сообщения
+                          </div>
+                          <Dialog.Close asChild>
+                            <Button variant="ghost" size="icon">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </Dialog.Close>
                         </div>
-                        <Dialog.Close asChild>
-                          <Button variant="ghost" size="icon">
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </Dialog.Close>
-                      </div>
-                      <TraceRouteMap
-                        points={[...traceMapData.pointsForward, ...traceMapData.pointsBack]}
-                        segments={traceMapData.segments}
-                        totalDistanceKm={traceMapData.distance.total}
-                        directionDistance={traceMapData.distance}
-                        interactive
-                        showAttribution
-                        className="h-[520px]"
-                      />
-                      <div className="mt-3 text-xs text-muted-foreground flex flex-wrap gap-4">
-                        <span>Вперёд: {formatKm(traceMapData.distance.forward)}</span>
-                        <span>Назад: {traceMapData.distance.back ? formatKm(traceMapData.distance.back) : '—'}</span>
-                        <span className="font-medium text-foreground">Суммарно: {formatKm(traceMapData.distance.total)}</span>
-                      </div>
-                      <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="inline-flex items-center gap-1">
-                            <span className="inline-block w-3 h-1.5 bg-blue-600 rounded-sm" /> прямой маршрут
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <span className="inline-block w-3 h-1.5 bg-green-600 rounded-sm border border-border" /> обратный маршрут (пунктир)
-                          </span>
-                          {traceMapData.segments.some((s) => s.approximate) && (
+                        <TraceRouteMap
+                          points={[...traceMapData.pointsForward, ...traceMapData.pointsBack]}
+                          segments={traceMapData.segments}
+                          totalDistanceKm={traceMapData.distance.total}
+                          directionDistance={traceMapData.distance}
+                          interactive
+                          showAttribution
+                          className="h-[520px]"
+                        />
+                        <div className="mt-3 text-xs text-muted-foreground flex flex-wrap gap-4">
+                          <span>Вперёд: {formatKm(traceMapData.distance.forward)}</span>
+                          <span>Назад: {traceMapData.distance.back ? formatKm(traceMapData.distance.back) : '—'}</span>
+                          <span className="font-medium text-foreground">Суммарно: {formatKm(traceMapData.distance.total)}</span>
+                        </div>
+                        <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="inline-flex items-center gap-1">
-                              <span className="inline-block w-3 h-1.5 bg-slate-400 rounded-sm border border-border" /> участок с неизвестными хопами
+                              <span className="inline-block w-3 h-1.5 bg-blue-600 rounded-sm" /> прямой маршрут
                             </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block w-3 h-1.5 bg-green-600 rounded-sm border border-border" /> обратный маршрут (пунктир)
+                            </span>
+                            {traceMapData.segments.some((s) => s.approximate) && (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="inline-block w-3 h-1.5 bg-slate-400 rounded-sm border border-border" /> участок с неизвестными хопами
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block w-3 h-3 rounded-full bg-blue-600" /> начало
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block w-3 h-3 rounded-full bg-green-600" /> цель
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="inline-block w-3 h-3 rounded-full bg-amber-500" /> hop
+                            </span>
+                          </div>
+                          {traceMapData.unknown > 0 && (
+                            <div className="text-[11px] text-amber-600">
+                              Есть узлы без координат — линии обрываются на них.
+                            </div>
                           )}
-                          <span className="inline-flex items-center gap-1">
-                            <span className="inline-block w-3 h-3 rounded-full bg-blue-600" /> начало
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <span className="inline-block w-3 h-3 rounded-full bg-green-600" /> цель
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <span className="inline-block w-3 h-3 rounded-full bg-amber-500" /> hop
-                          </span>
                         </div>
+
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                          <div className="bg-card border border-border/60 rounded-lg divide-y divide-border/60">
+                            <div className="px-3 py-2 font-semibold flex items-center gap-2">
+                              <span className="inline-block w-3 h-1.5 bg-blue-600 rounded-sm" />
+                              Прямой маршрут
+                            </div>
+                            {traceMapData.pointsForward.map((p, idx) => (
+                              <div key={`${p.id}-${p.direction}-${idx}`} className="flex items-center justify-between px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      'inline-block w-2.5 h-2.5 rounded-full',
+                                      p.role === 'source'
+                                        ? 'bg-blue-600'
+                                        : p.role === 'dest'
+                                          ? 'bg-green-600'
+                                          : 'bg-amber-500'
+                                    )}
+                                    aria-hidden
+                                  />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{p.name}</span>
+                                    <span className="text-muted-foreground/70 text-[11px]">
+                                      Hop {idx + 1} • {p.id}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right text-[11px] text-muted-foreground">
+                                  {p.hasCoords
+                                    ? `${formatCoord(p.lat, 4)}, ${formatCoord(p.lon, 4)}`
+                                    : <span className="text-amber-600">нет координат</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="bg-card border border-border/60 rounded-lg divide-y divide-border/60">
+                            <div className="px-3 py-2 font-semibold flex items-center gap-2">
+                              <span className="inline-block w-3 h-1.5 bg-green-600 rounded-sm" />
+                              Обратный маршрут
+                            </div>
+                            {traceMapData.pointsBack.map((p, idx) => (
+                              <div key={`${p.id}-${p.direction}-${idx}`} className="flex items-center justify-between px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      'inline-block w-2.5 h-2.5 rounded-full',
+                                      p.role === 'source'
+                                        ? 'bg-blue-600'
+                                        : p.role === 'dest'
+                                          ? 'bg-green-600'
+                                          : 'bg-amber-500'
+                                    )}
+                                    aria-hidden
+                                  />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{p.name}</span>
+                                    <span className="text-muted-foreground/70 text-[11px]">
+                                      Hop {idx + 1} • {p.id}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right text-[11px] text-muted-foreground">
+                                  {p.hasCoords
+                                    ? `${formatCoord(p.lat, 4)}, ${formatCoord(p.lon, 4)}`
+                                    : <span className="text-amber-600">нет координат</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
                         {traceMapData.unknown > 0 && (
-                          <div className="text-[11px] text-amber-600">
+                          <p className="mt-2 text-xs text-muted-foreground">
                             Есть узлы без координат — линии обрываются на них.
-                          </div>
+                          </p>
                         )}
-                      </div>
-
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        <div className="bg-card border border-border/60 rounded-lg divide-y divide-border/60">
-                          <div className="px-3 py-2 font-semibold flex items-center gap-2">
-                            <span className="inline-block w-3 h-1.5 bg-blue-600 rounded-sm" />
-                            Прямой маршрут
-                          </div>
-                          {traceMapData.pointsForward.map((p, idx) => (
-                            <div key={`${p.id}-${p.direction}-${idx}`} className="flex items-center justify-between px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={cn(
-                                    'inline-block w-2.5 h-2.5 rounded-full',
-                                    p.role === 'source'
-                                      ? 'bg-blue-600'
-                                      : p.role === 'dest'
-                                        ? 'bg-green-600'
-                                        : 'bg-amber-500'
-                                  )}
-                                  aria-hidden
-                                />
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{p.name}</span>
-                                  <span className="text-muted-foreground/70 text-[11px]">
-                                    Hop {idx + 1} • {p.id}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-right text-[11px] text-muted-foreground">
-                                {p.hasCoords
-                                  ? `${formatCoord(p.lat, 4)}, ${formatCoord(p.lon, 4)}`
-                                  : <span className="text-amber-600">нет координат</span>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="bg-card border border-border/60 rounded-lg divide-y divide-border/60">
-                          <div className="px-3 py-2 font-semibold flex items-center gap-2">
-                            <span className="inline-block w-3 h-1.5 bg-green-600 rounded-sm" />
-                            Обратный маршрут
-                          </div>
-                          {traceMapData.pointsBack.map((p, idx) => (
-                            <div key={`${p.id}-${p.direction}-${idx}`} className="flex items-center justify-between px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={cn(
-                                    'inline-block w-2.5 h-2.5 rounded-full',
-                                    p.role === 'source'
-                                      ? 'bg-blue-600'
-                                      : p.role === 'dest'
-                                        ? 'bg-green-600'
-                                        : 'bg-amber-500'
-                                  )}
-                                  aria-hidden
-                                />
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{p.name}</span>
-                                  <span className="text-muted-foreground/70 text-[11px]">
-                                    Hop {idx + 1} • {p.id}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="text-right text-[11px] text-muted-foreground">
-                                {p.hasCoords
-                                  ? `${formatCoord(p.lat, 4)}, ${formatCoord(p.lon, 4)}`
-                                  : <span className="text-amber-600">нет координат</span>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {traceMapData.unknown > 0 && (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Есть узлы без координат — линии обрываются на них.
-                        </p>
-                      )}
                       </Dialog.Content>
                     </Dialog.Portal>
                   </Dialog.Root>
