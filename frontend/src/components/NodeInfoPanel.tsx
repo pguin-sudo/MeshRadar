@@ -431,10 +431,6 @@ export function NodeInfoPanel() {
     return date.toLocaleDateString()
   }
 
-  const getRouteNodeName = (num: number) => {
-    const node = nodes.find((n) => n.num === num)
-    return node ? getNodeName(node) : `!${num.toString(16).padStart(8, '0')}`
-  }
 
   const getNodeCoords = (node?: typeof nodes[number] | null) => {
     if (!node?.position) return null
@@ -610,47 +606,6 @@ export function NodeInfoPanel() {
   ])
 
   // Build full route with source and destination
-  const buildFullRoute = (intermediateHops: number[], direction: 'forward' | 'back' = 'forward') => {
-    // Re-use logic for finding/synthesizing myNode
-    const findNodeByIdOrNum = (id?: string | null, num?: number | null) => {
-      if (!id && !num) return null
-      return nodes.find((n) =>
-        (id && n.id?.toLowerCase() === id.toLowerCase()) ||
-        (num !== undefined && num !== null && num !== 0 && n.num === num)
-      )
-    }
-
-    const myNodeFromStore = findNodeByIdOrNum(status.my_node_id, status.my_node_num)
-    const myNode = myNodeFromStore || (status.my_node_id ? {
-      id: status.my_node_id,
-      num: status.my_node_num || 0,
-      user: { longName: 'Me (Local Node)', shortName: 'Me', hwModel: '', id: status.my_node_id }
-    } : null)
-    const fullRoute: Array<{ num: number, name: string, isSource?: boolean, isDest?: boolean }> = []
-
-    if (direction === 'forward') {
-      // Source (Me) -> Hops -> Destination (Target)
-      if (myNode) {
-        fullRoute.push({ num: myNode.num, name: getNodeName(myNode), isSource: true })
-      }
-      intermediateHops.forEach(hopNum => {
-        fullRoute.push({ num: hopNum, name: getRouteNodeName(hopNum) })
-      })
-      fullRoute.push({ num: selectedNode.num, name: getNodeName(selectedNode), isDest: true })
-    } else {
-      // Source (Target) -> Hops -> Destination (Me)
-      fullRoute.push({ num: selectedNode.num, name: getNodeName(selectedNode), isDest: true })
-      // route_back is usually in return order (Target -> Hops -> Me)
-      intermediateHops.forEach(hopNum => {
-        fullRoute.push({ num: hopNum, name: getRouteNodeName(hopNum) })
-      })
-      if (myNode) {
-        fullRoute.push({ num: myNode.num, name: getNodeName(myNode), isSource: true })
-      }
-    }
-
-    return fullRoute
-  }
 
   return (
     <div className="w-[420px] bg-card border-l border-border flex flex-col h-full">
@@ -840,71 +795,7 @@ export function NodeInfoPanel() {
           {/* Traceroute result */}
           {isTracerouteForThisNode && (
             <div className="mt-3 space-y-3">
-              {/* Direct connection message */}
-              {tracerouteResult.route.length === 0 && (
-                <div className="p-3 bg-secondary/50 rounded-lg">
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Signal className="w-4 h-4" />
-                    <span>Direct connection (no intermediate hops)</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Forward route */}
-              {tracerouteResult.route.length > 0 && (
-                <div className="p-3 bg-secondary/50 rounded-lg">
-                  <div className="text-xs text-muted-foreground uppercase mb-2 flex items-center gap-2">
-                    <span>→ Route to destination</span>
-                  </div>
-                  <div className="space-y-1">
-                    {buildFullRoute(tracerouteResult.route).map((hop, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">{i + 1}.</span>
-                        <span className={hop.isSource ? "font-semibold text-primary" : hop.isDest ? "font-semibold text-primary" : ""}>
-                          {hop.name}
-                        </span>
-                        {hop.isSource && <span className="text-xs text-muted-foreground">(you)</span>}
-                        {hop.isDest && <span className="text-xs text-muted-foreground">(target)</span>}
-                        {!hop.isSource && !hop.isDest &&
-                          typeof tracerouteResult.snr_towards[i - 1] === 'number' &&
-                          !Number.isNaN(tracerouteResult.snr_towards[i - 1]) && (
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              SNR: {tracerouteResult.snr_towards[i - 1].toFixed(1)} dB
-                            </span>
-                          )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Return route (if different) */}
-              {tracerouteResult.route_back && tracerouteResult.route_back.length > 0 && (
-                <div className="p-3 bg-secondary/50 rounded-lg">
-                  <div className="text-xs text-muted-foreground uppercase mb-2 flex items-center gap-2">
-                    <span>← Return route</span>
-                  </div>
-                  <div className="space-y-1">
-                    {buildFullRoute(tracerouteResult.route_back, 'back').map((hop, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">{i + 1}.</span>
-                        <span className={hop.isSource ? "font-semibold text-primary" : hop.isDest ? "font-semibold text-primary" : ""}>
-                          {hop.name}
-                        </span>
-                        {hop.isSource && <span className="text-xs text-muted-foreground">(you)</span>}
-                        {hop.isDest && <span className="text-xs text-muted-foreground">(target)</span>}
-                        {!hop.isSource && !hop.isDest &&
-                          typeof tracerouteResult.snr_back[i - 1] === 'number' &&
-                          !Number.isNaN(tracerouteResult.snr_back[i - 1]) && (
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              SNR: {tracerouteResult.snr_back[i - 1].toFixed(1)} dB
-                            </span>
-                          )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Map preview */}
 
               {/* Map preview */}
               {traceMapData && (
