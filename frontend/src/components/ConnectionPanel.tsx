@@ -96,16 +96,31 @@ export function ConnectionPanel() {
           )}
         </>
       ) : (
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">
-            <div>{status.connection_type?.toUpperCase()}: {status.address}</div>
-            <div>Node: {status.my_node_id}</div>
+        <div className="space-y-3">
+          <div className="text-[11px] leading-relaxed">
+            <div className="flex justify-between items-center text-muted-foreground/80 mb-1 border-b border-border/40 pb-1">
+              <span>Connection Details</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="text-muted-foreground uppercase text-[9px] tracking-wider whitespace-nowrap">Type:</span>
+                <span className="font-medium uppercase truncate">{status.connection_type || 'Unknown'}</span>
+              </div>
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="text-muted-foreground uppercase text-[9px] tracking-wider whitespace-nowrap">Node:</span>
+                <span className="font-mono text-primary truncate">{status.my_node_id || 'Wait...'}</span>
+              </div>
+              <div className="flex items-center gap-1 col-span-2 border-t border-border/20 pt-1 mt-0.5 min-w-0">
+                <span className="text-muted-foreground uppercase text-[9px] tracking-wider whitespace-nowrap">Address:</span>
+                <span className="font-medium truncate">{status.address || '—'}</span>
+              </div>
+            </div>
           </div>
           <Button
             variant="outline"
             onClick={handleDisconnect}
             disabled={disconnect.isPending}
-            className="w-full"
+            className="w-full h-8 text-xs hover:bg-destructive/10 hover:text-destructive transition-colors"
             size="sm"
           >
             Disconnect

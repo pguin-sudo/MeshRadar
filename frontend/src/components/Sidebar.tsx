@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Hash, User, Radio, Battery, Signal, ArrowUpDown, Search, X } from 'lucide-react'
+import { Hash, User, Battery, Signal, ArrowUpDown, Search, X } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +16,7 @@ import { cn, getNodeName } from '@/lib/utils'
 type SortType = 'name' | 'lastHeard'
 
 export function Sidebar() {
-  const { currentChat, setActiveTab, setSelectedNode, selectedNode, status, getUnreadForChat } = useMeshStore()
+  const { currentChat, setActiveTab, setSelectedNode, selectedNode, getUnreadForChat } = useMeshStore()
   const { data: nodes } = useNodes()
   const { data: channels } = useChannels()
   const [sortBy, setSortBy] = useState<SortType>('name')
@@ -113,17 +113,16 @@ export function Sidebar() {
   )
 
   return (
-    <div className="w-[420px] bg-card border-r border-border flex flex-col h-full">
+    <div className="w-[360px] bg-card border-r border-border flex flex-col h-full">
       {/* Header */}
       <div className="h-14 px-4 border-b border-border flex items-center justify-between shrink-0">
         <div className="font-semibold text-lg flex items-center gap-2">
           <Hash className="w-5 h-5" />
           Meshtastic
         </div>
-        <div className="flex items-center gap-1">
-          <ConnectionPanel />
-        </div>
       </div>
+
+      <ConnectionPanel />
 
       {channels && channels.length > 0 ? (
         <ScrollArea className="flex-1">

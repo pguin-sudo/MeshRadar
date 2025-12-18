@@ -608,7 +608,7 @@ export function NodeInfoPanel() {
   // Build full route with source and destination
 
   return (
-    <div className="w-[420px] bg-card border-l border-border flex flex-col h-full">
+    <div className="w-[360px] bg-card border-l border-border flex flex-col h-full">
       <div className="h-14 px-4 border-b border-border flex items-center justify-between">
         <h2 className="font-semibold">Node Info</h2>
         <Button variant="ghost" size="icon" onClick={() => setSelectedNode(null)}>
