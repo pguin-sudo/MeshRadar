@@ -324,7 +324,17 @@ function TraceRouteMap({
   return <div ref={containerRef} className={cn('relative rounded-lg overflow-hidden', className)} />
 }
 
-function GlobalNetworkMap({ nodes, onSelectNode, className }: { nodes: any[], onSelectNode: (node: any) => void, className?: string }) {
+function GlobalNetworkMap({
+  nodes,
+  onSelectNode,
+  className,
+  showAttribution = true
+}: {
+  nodes: any[],
+  onSelectNode: (node) => void,
+  className?: string,
+  showAttribution?: boolean
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markersRef = useRef<Marker[]>([])
@@ -347,6 +357,7 @@ function GlobalNetworkMap({ nodes, onSelectNode, className }: { nodes: any[], on
       center,
       zoom: 4,
       interactive: true,
+      attributionControl: showAttribution ? undefined : false,
     })
 
     mapRef.current.addControl(new NavigationControl({ showCompass: false }), 'top-right')
@@ -376,7 +387,7 @@ function GlobalNetworkMap({ nodes, onSelectNode, className }: { nodes: any[], on
 
       // Label
       const label = document.createElement('div')
-      label.className = 'mt-1 px-1.5 py-0.5 bg-white/90 rounded border border-white/50 shadow-sm text-[10px] font-bold text-slate-900 group-hover:bg-primary group-hover:text-white transition-colors whitespace-nowrap'
+      label.className = 'mt-1 px-2 py-1 bg-white/90 rounded-md border border-white/50 shadow-sm text-[13px] font-bold text-slate-900 group-hover:bg-primary group-hover:text-white transition-colors whitespace-nowrap'
       label.textContent = node.user?.shortName || node.user?.longName || node.id
       el.appendChild(label)
 
@@ -775,17 +786,8 @@ export function NodeInfoPanel() {
                 <MapIcon className="w-3 h-3" />
                 Network Map
               </h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[10px] font-bold uppercase gap-1 text-primary hover:text-primary hover:bg-primary/10"
-                onClick={() => setIsGlobalMapModalOpen(true)}
-              >
-                <Maximize2 className="w-3 h-3" />
-                Fullscreen
-              </Button>
             </div>
-            <div className="relative overflow-hidden rounded-xl border border-border/50 shadow-sm bg-secondary/20">
+            <div className="relative overflow-hidden rounded-xl border border-border/50 shadow-sm bg-secondary/20 mb-3">
               <GlobalNetworkMap
                 nodes={nodes}
                 onSelectNode={(node) => {
@@ -793,8 +795,17 @@ export function NodeInfoPanel() {
                   setIsNetworkMapOpen(false)
                 }}
                 className="h-[200px]"
+                showAttribution={false}
               />
             </div>
+            <Button
+              variant="outline"
+              className="w-full flex items-center justify-center gap-2 h-10 rounded-xl"
+              onClick={() => setIsGlobalMapModalOpen(true)}
+            >
+              <Maximize2 className="w-4 h-4" />
+              <span>Open Global Map</span>
+            </Button>
           </div>
 
           {/* Mesh Intelligence Stats */}
