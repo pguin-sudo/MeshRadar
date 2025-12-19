@@ -54,6 +54,7 @@ function MapView({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
+  const isUserInteracting = useRef(false)
 
   // Create map once
   useEffect(() => {
@@ -70,6 +71,12 @@ function MapView({
     })
     if (interactive) {
       mapRef.current.addControl(new NavigationControl({ showCompass: false }), 'top-right')
+
+      const setInteracting = () => { isUserInteracting.current = true }
+      mapRef.current.on('movestart', setInteracting)
+      mapRef.current.on('zoomstart', setInteracting)
+      mapRef.current.on('touchstart', setInteracting)
+      mapRef.current.on('mousedown', setInteracting)
     }
 
     const markerEl = document.createElement('div')
@@ -89,7 +96,7 @@ function MapView({
 
   // Sync view when coords/zoom change
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapRef.current || isUserInteracting.current) return
     mapRef.current.setCenter([longitude, latitude])
     mapRef.current.setZoom(zoom)
     mapRef.current.resize()
@@ -137,6 +144,7 @@ function TraceRouteMap({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
+  const isUserInteracting = useRef(false)
   const id = useId().replace(/:/g, '')
 
   const geoData = useMemo(() => {
@@ -193,6 +201,12 @@ function TraceRouteMap({
     })
     if (interactive) {
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right')
+
+      const setInteracting = () => { isUserInteracting.current = true }
+      map.on('movestart', setInteracting)
+      map.on('zoomstart', setInteracting)
+      map.on('touchstart', setInteracting)
+      map.on('mousedown', setInteracting)
     }
     mapRef.current = map
 
@@ -317,7 +331,7 @@ function TraceRouteMap({
       labelMarkersRef.current.push(marker)
     })
 
-    if (bounds) {
+    if (bounds && !isUserInteracting.current) {
       map.fitBounds([bounds.sw, bounds.ne], { padding: 40, duration: 300 })
     }
   }, [geoData, bounds, id, points])
