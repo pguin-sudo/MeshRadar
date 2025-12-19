@@ -1,4 +1,4 @@
-import { X, MapPin, Battery, Signal, Cpu, Route, Loader2, AlertCircle, Map as MapIcon, MessageSquare } from 'lucide-react'
+import { X, MapPin, Battery, Signal, Cpu, Route, Loader2, AlertCircle, Map as MapIcon, MessageSquare, Maximize2, Zap, Activity, HardDrive } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -324,8 +324,92 @@ function TraceRouteMap({
   return <div ref={containerRef} className={cn('relative rounded-lg overflow-hidden', className)} />
 }
 
+function GlobalNetworkMap({ nodes, onSelectNode, className }: { nodes: any[], onSelectNode: (node: any) => void, className?: string }) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const mapRef = useRef<MapLibreMap | null>(null)
+  const markersRef = useRef<Marker[]>([])
+
+  const nodesWithCoords = useMemo(() => {
+    return nodes.filter(n => n.position?.latitude && n.position?.longitude)
+  }, [nodes])
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return
+
+    // Center map on the first node with coords or [0,0]
+    const center: [number, number] = nodesWithCoords.length > 0
+      ? [nodesWithCoords[0].position.longitude, nodesWithCoords[0].position.latitude]
+      : [0, 0]
+
+    mapRef.current = new MapLibreMap({
+      container: containerRef.current,
+      style: OSM_RASTER_STYLE as any,
+      center,
+      zoom: 4,
+      interactive: true,
+    })
+
+    mapRef.current.addControl(new NavigationControl({ showCompass: false }), 'top-right')
+
+    return () => {
+      mapRef.current?.remove()
+      mapRef.current = null
+    }
+  }, []) // Initial load only
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    // Clear old markers
+    markersRef.current.forEach(m => m.remove())
+    markersRef.current = []
+
+    nodesWithCoords.forEach(node => {
+      const el = document.createElement('div')
+      el.className = 'group cursor-pointer flex flex-col items-center'
+
+      // Marker Dot
+      const dot = document.createElement('div')
+      dot.className = 'w-3 h-3 rounded-full bg-primary ring-2 ring-white shadow-md transition-transform group-hover:scale-125'
+      el.appendChild(dot)
+
+      // Label
+      const label = document.createElement('div')
+      label.className = 'mt-1 px-1.5 py-0.5 bg-white/90 rounded border border-white/50 shadow-sm text-[10px] font-bold text-slate-900 group-hover:bg-primary group-hover:text-white transition-colors whitespace-nowrap'
+      label.textContent = node.user?.shortName || node.user?.longName || node.id
+      el.appendChild(label)
+
+      el.onclick = () => onSelectNode(node)
+
+      const marker = new Marker({ element: el, anchor: 'top' })
+        .setLngLat([node.position.longitude, node.position.latitude])
+        .addTo(map)
+
+      markersRef.current.push(marker)
+    })
+
+    // Fit bounds if we have multiple points
+    if (nodesWithCoords.length > 1) {
+      const lats = nodesWithCoords.map(n => n.position.latitude)
+      const lons = nodesWithCoords.map(n => n.position.longitude)
+      map.fitBounds([
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)]
+      ], { padding: 40, duration: 300 })
+    }
+  }, [nodesWithCoords, onSelectNode])
+
+  return <div ref={containerRef} className={cn('relative w-full h-full', className)} />
+}
+
 export function NodeInfoPanel() {
-  const { selectedNode, setSelectedNode, tracerouteResult, setTracerouteResult, nodes, status, setActiveTab } = useMeshStore()
+  const {
+    selectedNode, setSelectedNode,
+    isNetworkMapOpen, setIsNetworkMapOpen,
+    tracerouteResult, setTracerouteResult,
+    nodes, status, setActiveTab
+  } = useMeshStore()
   const traceroute = useTraceroute()
   const [tracerouteTimeout, setTracerouteTimeout] = useState(false)
   const [tracerouteCountdown, setTracerouteCountdown] = useState(60)
@@ -336,11 +420,15 @@ export function NodeInfoPanel() {
   const [isMapOpen, setIsMapOpen] = useState(false)
   const [isTraceMapOpen, setIsTraceMapOpen] = useState(false)
   const [routeViewMode, setRouteViewMode] = useState<'forward' | 'back'>('forward')
+  const [isGlobalMapModalOpen, setIsGlobalMapModalOpen] = useState(false)
 
-  if (!selectedNode) return null
+  const handleClose = () => {
+    setSelectedNode(null)
+    setIsNetworkMapOpen(false)
+  }
 
   const handleTraceroute = () => {
-    if (selectedNode.id) {
+    if (selectedNode?.id) {
       // Clear old traceroute result and timeout state
       setTracerouteResult(null)
       setTracerouteTimeout(false)
@@ -385,7 +473,7 @@ export function NodeInfoPanel() {
 
   // Clear timeout when result arrives
   useEffect(() => {
-    if (tracerouteResult && tracerouteResult.from === selectedNode.id) {
+    if (tracerouteResult && selectedNode && tracerouteResult.from === selectedNode.id) {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
         timeoutRef.current = null
@@ -399,7 +487,7 @@ export function NodeInfoPanel() {
       setTracerouteInProgress(false)
       tracerouteInProgressRef.current = false
     }
-  }, [tracerouteResult, selectedNode.id])
+  }, [tracerouteResult, selectedNode?.id])
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -416,7 +504,7 @@ export function NodeInfoPanel() {
   }, [])
 
   // Check if traceroute result is for the currently selected node
-  const isTracerouteForThisNode = tracerouteResult && tracerouteResult.from === selectedNode.id
+  const isTracerouteForThisNode = tracerouteResult && selectedNode && tracerouteResult.from === selectedNode.id
 
   const formatLastHeard = (timestamp?: number) => {
     if (!timestamp) return 'Unknown'
@@ -429,7 +517,6 @@ export function NodeInfoPanel() {
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
     return date.toLocaleDateString()
   }
-
 
   const getNodeCoords = (node?: typeof nodes[number] | null) => {
     if (!node?.position) return null
@@ -451,15 +538,45 @@ export function NodeInfoPanel() {
     const dLon = toRad(b.lon - a.lon)
     const lat1 = toRad(a.lat)
     const lat2 = toRad(b.lat)
-    const h =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
-    const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
-    return R * c
+    const aVal =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    const cVal = 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1 - aVal))
+    return R * cVal
   }
 
+
+
+
+  const meshStats = useMemo(() => {
+    const total = nodes.length
+    if (total === 0) return null
+
+    const withBattery = nodes.filter(n => n.deviceMetrics?.batteryLevel !== undefined)
+    const avgBattery = withBattery.length > 0
+      ? Math.round(withBattery.reduce((acc, n) => acc + (n.deviceMetrics?.batteryLevel || 0), 0) / withBattery.length)
+      : null
+
+    const hwModels: Record<string, number> = {}
+    nodes.forEach(n => {
+      const model = n.user?.hwModel || 'Unknown'
+      hwModels[model] = (hwModels[model] || 0) + 1
+    })
+    const sortedHw = Object.entries(hwModels)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+
+    const withCoords = nodes.filter(n => n.position?.latitude && n.position?.longitude).length
+    const online = nodes.filter(n => {
+      const now = Math.floor(Date.now() / 1000)
+      return n.lastHeard && (now - n.lastHeard < 3600) // Online if heard in last hour
+    }).length
+
+    return { total, avgBattery, sortedHw, withCoords, online }
+  }, [nodes])
+
   const traceMapData = useMemo(() => {
-    if (!isTracerouteForThisNode || !tracerouteResult) return null
+    if (!isTracerouteForThisNode || !tracerouteResult || !selectedNode) return null
 
     // Improved node finding helper
     const findNodeByIdOrNum = (id?: string | null, num?: number | null) => {
@@ -495,6 +612,7 @@ export function NodeInfoPanel() {
       const points: TraceMapPoint[] = []
       const segments: TraceMapSegment[] = []
       let unknown = 0
+      let distance = 0
 
       let hopIndex = 0
 
@@ -535,7 +653,6 @@ export function NodeInfoPanel() {
 
       let lastKnown: { lat: number; lon: number } | null = null
       let gap = false
-      let distance = 0
 
       sequence.forEach((entry) => {
         hopIndex += 1
@@ -553,58 +670,242 @@ export function NodeInfoPanel() {
           })
           unknown += 1
           gap = true
-          return
-        }
-        const coords = addPoint(entry.node, entry.role)
-        if (coords && lastKnown) {
-          const segmentDistance = haversineKm(lastKnown, coords)
-          distance += segmentDistance
-          segments.push({
-            coords: [
-              [lastKnown.lon, lastKnown.lat],
-              [coords.lon, coords.lat],
-            ],
-            direction,
-            approximate: gap,
-            distanceKm: segmentDistance,
-          })
-        }
-        if (coords) {
-          lastKnown = coords
-          gap = false
         } else {
-          gap = true
+          const coords = addPoint(entry.node, entry.role)
+          if (coords) {
+            if (lastKnown && !gap) {
+              segments.push({
+                coords: [
+                  [lastKnown.lon, lastKnown.lat],
+                  [coords.lon, coords.lat],
+                ],
+                direction,
+                approximate: false,
+              })
+              const segmentDistance = haversineKm(lastKnown, coords)
+              distance += segmentDistance
+            } else if (lastKnown && gap) {
+              segments.push({
+                coords: [
+                  [lastKnown.lon, lastKnown.lat],
+                  [coords.lon, coords.lat],
+                ],
+                direction,
+                approximate: true,
+              })
+              const segmentDistance = haversineKm(lastKnown, coords)
+              distance += segmentDistance
+            }
+            lastKnown = coords
+            gap = false
+          } else {
+            gap = true
+          }
         }
       })
 
       return { points, segments, unknown, distance }
     }
 
-    const forward = buildPath(tracerouteResult.route, 'forward')
-    const backNums = tracerouteResult.route_back || []
-    const back = buildPath(backNums, 'back')
+    const forwardResult = buildPath(tracerouteResult.route || [], 'forward')
+    const backResult = buildPath(tracerouteResult.route_back || [], 'back')
 
     return {
-      pointsForward: forward.points,
-      pointsBack: back.points,
-      segments: [...forward.segments, ...back.segments],
-      unknown: forward.unknown + back.unknown,
+      pointsForward: forwardResult.points,
+      pointsBack: backResult.points,
+      segments: [...forwardResult.segments, ...backResult.segments],
+      unknown: forwardResult.unknown + backResult.unknown,
       distance: {
-        forward: forward.distance,
-        back: back.distance,
-        total: forward.distance + back.distance,
+        forward: forwardResult.distance,
+        back: backResult.distance,
+        total: forwardResult.distance + (backResult.distance || 0),
       },
     }
-  }, [
-    isTracerouteForThisNode,
-    tracerouteResult,
-    nodes,
-    status.my_node_id,
-    status.my_node_num,
-    selectedNode,
-  ])
+  }, [isTracerouteForThisNode, tracerouteResult, nodes, status.my_node_id, status.my_node_num, selectedNode])
 
-  // Build full route with source and destination
+  if (!selectedNode && !isNetworkMapOpen) return null
+
+  // Common Header
+  const header = (
+    <div className="p-4 border-b border-border flex items-center justify-between bg-card/50 backdrop-blur-md sticky top-0 z-30">
+      <div className="flex items-center gap-2">
+        {selectedNode ? (
+          <>
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+              {selectedNode.user?.shortName || '?'}
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm leading-tight">
+                {selectedNode.user?.longName || 'Unknown Node'}
+              </h3>
+              <p className="text-[10px] text-muted-foreground font-mono">
+                {selectedNode.id}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <MapIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm leading-tight">Network Map</h3>
+              <p className="text-[10px] text-muted-foreground">
+                {nodes.length} nodes in mesh
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={handleClose}>
+        <X className="w-4 h-4" />
+      </Button>
+    </div>
+  )
+
+  if (isNetworkMapOpen) {
+    return (
+      <div className="w-[360px] flex-shrink-0 border-l border-border bg-card flex flex-col h-full shadow-2xl z-20 overflow-hidden">
+        {header}
+        <ScrollArea className="flex-1 p-4">
+          {/* Mini Map with Expand Button */}
+          <div className="mb-6 group relative">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs text-muted-foreground uppercase flex items-center gap-1">
+                <MapIcon className="w-3 h-3" />
+                Network Map
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px] font-bold uppercase gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                onClick={() => setIsGlobalMapModalOpen(true)}
+              >
+                <Maximize2 className="w-3 h-3" />
+                Fullscreen
+              </Button>
+            </div>
+            <div className="relative overflow-hidden rounded-xl border border-border/50 shadow-sm bg-secondary/20">
+              <GlobalNetworkMap
+                nodes={nodes}
+                onSelectNode={(node) => {
+                  setSelectedNode(node)
+                  setIsNetworkMapOpen(false)
+                }}
+                className="h-[200px]"
+              />
+            </div>
+          </div>
+
+          {/* Mesh Intelligence Stats */}
+          {meshStats && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              {/* Quick Overview */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-primary/5 border border-primary/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold">Active Nodes</span>
+                  </div>
+                  <div className="text-xl font-bold">{meshStats.online} <span className="text-[10px] font-normal text-muted-foreground">/ {meshStats.total}</span></div>
+                </div>
+                <div className="p-3 rounded-xl bg-orange-500/5 border border-orange-500/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold">Avg Energy</span>
+                  </div>
+                  <div className="text-xl font-bold">{meshStats.avgBattery ?? '—'}%</div>
+                </div>
+              </div>
+
+              {/* Hardware Diversity */}
+              <div className="bg-secondary/20 rounded-xl p-4 border border-border/30">
+                <h4 className="text-[11px] font-bold text-muted-foreground uppercase mb-3 flex items-center gap-2">
+                  <HardDrive className="w-3.5 h-3.5" />
+                  Hardware diversity
+                </h4>
+                <div className="space-y-3">
+                  {meshStats.sortedHw.map(([model, count]) => {
+                    const percent = Math.round((count / meshStats.total) * 100);
+                    return (
+                      <div key={model}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="truncate pr-2">{model}</span>
+                          <span className="text-muted-foreground">{count} ({percent}%)</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-secondary/50 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all duration-1000"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Connectivity Health */}
+              <div className="bg-secondary/20 rounded-xl p-4 border border-border/30">
+                <h4 className="text-[11px] font-bold text-muted-foreground uppercase mb-3">Connectivity Health</h4>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs">Coordinate Coverage</span>
+                    <span className="text-xs font-mono">{Math.round((meshStats.withCoords / meshStats.total) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="text-xs">Network Relevancy</span>
+                    <span className="text-xs font-mono">{Math.round((meshStats.online / meshStats.total) * 100)}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </ScrollArea>
+
+        {/* Global Map Modal */}
+        <Dialog.Root open={isGlobalMapModalOpen} onOpenChange={setIsGlobalMapModalOpen}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100]" />
+            <Dialog.Content className="fixed left-4 top-4 right-4 bottom-4 flex flex-col rounded-2xl bg-card shadow-2xl border border-border focus:outline-none z-[101] overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-border bg-card/80 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <MapIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <Dialog.Title className="text-lg font-bold">Global Mesh Network</Dialog.Title>
+                    <Dialog.Description className="text-sm text-muted-foreground">
+                      {nodes.length} nodes registered • {nodes.filter(n => n.position).length} with position
+                    </Dialog.Description>
+                  </div>
+                </div>
+                <Dialog.Close asChild>
+                  <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full">
+                    <X className="w-5 h-5" />
+                  </Button>
+                </Dialog.Close>
+              </div>
+              <div className="flex-1 relative bg-secondary/20">
+                <GlobalNetworkMap
+                  nodes={nodes}
+                  onSelectNode={(node) => {
+                    setSelectedNode(node)
+                    setIsGlobalMapModalOpen(false)
+                    setIsNetworkMapOpen(false)
+                  }}
+                />
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      </div>
+    )
+  }
+
+  // Final check for selectedNode before rendering details
+  if (!selectedNode) return null
+
 
   return (
     <div className="w-[360px] bg-card border-l border-border flex flex-col h-full">

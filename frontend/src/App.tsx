@@ -19,12 +19,13 @@ function AppContent() {
   useWebSocket()
   useTitleNotifications()
   const selectedNode = useMeshStore((s) => s.selectedNode)
+  const isNetworkMapOpen = useMeshStore((s) => s.isNetworkMapOpen)
 
   return (
     <div className="h-screen flex bg-background">
       <Sidebar />
       <ChatArea />
-      {selectedNode && <NodeInfoPanel />}
+      {(selectedNode || isNetworkMapOpen) && <NodeInfoPanel />}
     </div>
   )
 }

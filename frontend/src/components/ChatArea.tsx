@@ -18,6 +18,7 @@ export function ChatArea() {
   const scrollViewportRef = useRef<HTMLDivElement>(null)
   const currentChat = useMeshStore((s) => s.currentChat)
   const messages = useMeshStore((s) => s.messages)
+  const setIsNetworkMapOpen = useMeshStore((s) => s.setIsNetworkMapOpen)
   const status = useMeshStore((s) => s.status)
   const nodes = useMeshStore((s) => s.nodes)
   const resetUnreadForChat = useMeshStore((s) => s.resetUnreadForChat)
@@ -216,16 +217,21 @@ export function ChatArea() {
       <ChatTabs />
 
       {/* Header */}
-      <div className="h-14 px-4 border-b border-border flex items-center gap-3 bg-card/50">
+      <div
+        className="h-14 px-4 border-b border-border flex items-center gap-3 bg-card/50 hover:bg-card/80 cursor-pointer transition-colors group"
+        onClick={() => setIsNetworkMapOpen(true)}
+        title="Open Network Map"
+      >
         {currentChat.type === 'channel' ? (
-          <Hash className="w-5 h-5 text-muted-foreground" />
+          <Hash className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         ) : (
-          <User className="w-5 h-5 text-muted-foreground" />
+          <User className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
         )}
-        <div>
-          <h2 className="font-semibold">{currentChat.name}</h2>
-          <p className="text-xs text-muted-foreground">
+        <div className="flex-1">
+          <h2 className="font-semibold group-hover:text-primary transition-colors">{currentChat.name}</h2>
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
             {currentChat.type === 'channel' ? 'Channel' : 'Direct Message'}
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-[10px] bg-primary/10 text-primary px-1 rounded">Open Map</span>
           </p>
         </div>
       </div>
