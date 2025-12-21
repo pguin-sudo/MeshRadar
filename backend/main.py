@@ -19,15 +19,23 @@ import database as db
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Определяем базовую директорию (для PyInstaller)
+# Определяем базовую директорию и путь к статике
 if getattr(sys, 'frozen', False):
     # Запущено как exe
-    BASE_DIR = Path(sys.executable).parent
+    # sys._MEIPASS - это временная папка, куда PyInstaller распаковывает ресурсы
+    BUNDLE_DIR = Path(getattr(sys, '_MEIPASS', sys.executable))
+    
+    # Сначала проверяем внешнюю папку static (рядом с exe)
+    # Это позволяет пользователю «подменить» интерфейс без пересборки
+    EXTERNAL_STATIC = Path(sys.executable).parent / "static"
+    if EXTERNAL_STATIC.exists():
+        STATIC_DIR = EXTERNAL_STATIC
+    else:
+        # Если внешней нет, используем упакованную внутри
+        STATIC_DIR = BUNDLE_DIR / "static"
 else:
     # Запущено как скрипт
-    BASE_DIR = Path(__file__).parent
-
-STATIC_DIR = BASE_DIR / "static"
+    STATIC_DIR = Path(__file__).parent / "static"
 
 
 @asynccontextmanager
