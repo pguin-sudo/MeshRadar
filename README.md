@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![React](https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=white)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3%20%2B%20Commons%20Clause-blue?style=for-the-badge)](LICENSE)
 
 ### 📥 Download Latest Release
 
@@ -222,7 +222,11 @@ cd frontend && npm run build
 
 ## 📄 License
 
-MIT License © 2024
+GPLv3 + Commons Clause © 2024
+
+This project is licensed under GPLv3 with Commons Clause - see the [LICENSE](LICENSE) file for details.
+
+> **Note**: The Commons Clause means you can use, modify, and distribute this software freely, but you cannot sell it or offer it as a paid service.
 
 ---
 
