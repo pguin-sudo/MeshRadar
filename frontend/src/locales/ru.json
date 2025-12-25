@@ -46,7 +46,9 @@
         "noMessages": "Сообщений пока нет. Начните беседу!",
         "replyingTo": "Ответ {{name}}",
         "messagePlaceholder": "Написать {{name}}...",
-        "openMapLabel": "Открыть карту"
+        "openMapLabel": "Открыть карту",
+        "messageTooLong": "Сообщение превышает 233 байта",
+        "nearMessageLimit": "Приближение к лимиту сообщения"
     },
     "nodeInfo": {
         "title": "Инфо об узле",

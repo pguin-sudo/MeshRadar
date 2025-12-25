@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Hash, User, X, Reply } from 'lucide-react'
+import { Send, Hash, User, X, Reply, AlertCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,10 +13,23 @@ import { cn } from '@/lib/utils'
 import { isSameDay } from 'date-fns'
 import type { Message } from '@/types'
 
+const MAX_MESSAGE_BYTES = 233
+
+// Calculate UTF-8 byte length of a string
+const getMessageByteLength = (text: string): number => {
+  return new TextEncoder().encode(text).length
+}
+
 export function ChatArea() {
   const { t } = useTranslation()
   const [text, setText] = useState('')
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
+
+  // Calculate remaining bytes and status
+  const messageBytes = getMessageByteLength(text)
+  const remainingBytes = MAX_MESSAGE_BYTES - messageBytes
+  const isTooLong = messageBytes > MAX_MESSAGE_BYTES
+  const isNearLimit = remainingBytes <= 30 && remainingBytes > 0
   const scrollViewportRef = useRef<HTMLDivElement>(null)
   const currentChat = useMeshStore((s) => s.currentChat)
   const messages = useMeshStore((s) => s.messages)
@@ -158,7 +171,7 @@ export function ChatArea() {
   }, [processedMessages.length, chatKey, replyingTo])
 
   const handleSend = () => {
-    if (!text.trim() || !currentChat) return
+    if (!text.trim() || !currentChat || isTooLong) return
 
     sendMessage.mutate({
       text: text.trim(),
@@ -297,16 +310,45 @@ export function ChatArea() {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t('chat.messagePlaceholder', { name: currentChat.name })}
-            className="flex-1 shadow-sm"
+            className={cn(
+              "flex-1 shadow-sm",
+              isTooLong && "border-red-500 focus-visible:ring-red-500"
+            )}
           />
           <Button
             onClick={handleSend}
-            disabled={!text.trim() || sendMessage.isPending}
+            disabled={!text.trim() || sendMessage.isPending || isTooLong}
             size="icon"
             className="shrink-0"
           >
             <Send className="w-4 h-4" />
           </Button>
+        </div>
+
+        {/* Byte counter and warnings */}
+        <div className="mt-2 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1">
+            {isTooLong && (
+              <>
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <span className="text-red-500 font-medium">{t('chat.messageTooLong')}</span>
+              </>
+            )}
+            {isNearLimit && !isTooLong && (
+              <>
+                <AlertCircle className="w-4 h-4 text-yellow-500" />
+                <span className="text-yellow-600">{t('chat.nearMessageLimit')}</span>
+              </>
+            )}
+          </div>
+          <span className={cn(
+            "font-medium",
+            isTooLong && "text-red-500",
+            isNearLimit && !isTooLong && "text-yellow-600",
+            !isTooLong && !isNearLimit && "text-muted-foreground"
+          )}>
+            {messageBytes} / {MAX_MESSAGE_BYTES} bytes
+          </span>
         </div>
       </div>
     </div>

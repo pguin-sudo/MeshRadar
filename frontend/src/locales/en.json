@@ -46,7 +46,9 @@
         "noMessages": "No messages yet. Start the conversation!",
         "replyingTo": "Replying to {{name}}",
         "messagePlaceholder": "Message {{name}}...",
-        "openMapLabel": "Open Map"
+        "openMapLabel": "Open Map",
+        "messageTooLong": "Message exceeds 233 bytes",
+        "nearMessageLimit": "Approaching message limit"
     },
     "nodeInfo": {
         "title": "Node Info",
