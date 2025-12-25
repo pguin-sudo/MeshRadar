@@ -95,27 +95,20 @@ Output file: `dist/MeshRadar.exe`
 
 ---
 
-## 🐳 Docker-compose Version
+## 🐳 Docker Deployment
+
+For complete Docker setup and configuration guide, see [DOCKER.md](DOCKER.md)
+
+**Quick start:**
 
 ```bash
-cp .env.example .env
+docker-compose up -d
 ```
 
-Change your meshtastic device in `.env`
+Then open http://localhost:5173 and connect to your Meshtastic device through the UI.
 
-Run with logs:
-
-```bash
-docker-compose up --build
-```
-
-Or run as a daemon:
-
-```bash
-docker-compose up --build -d
-```
-
-> App will be avaliable at [http://localhost:5173](http://localhost:5173)
+> **Note**: USB connection is optional. By default, Docker runs without USB device mapping.
+> To enable USB, uncomment the `devices` section in `docker-compose.yml`.
 
 ---
 

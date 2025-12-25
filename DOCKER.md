@@ -43,18 +43,47 @@ DATABASE_PATH=/app/backend/data/meshradar.db
 
 ## Managing Containers
 
-```bash
-# Start
-docker-compose up -d
+### Start Container
 
-# Stop
+**Background mode (recommended):**
+```bash
+docker-compose up -d
+```
+- Runs in background (`-d` flag)
+- Terminal is free to use
+- View logs with: `docker-compose logs -f meshradar`
+
+**Foreground mode (for debugging):**
+```bash
+docker-compose up
+```
+- Shows logs in real-time
+- Press `Ctrl+C` to stop
+- Useful when troubleshooting issues
+
+### Rebuild Image
+
+Run this if you modified code in backend/frontend or Dockerfile:
+```bash
+docker-compose up -d --build
+```
+- `--build` flag rebuilds the Docker image before starting
+- Takes longer but ensures your changes are included
+
+### Other Commands
+
+```bash
+# Stop and remove containers
 docker-compose down
 
-# View logs
+# View logs in real-time
 docker-compose logs -f meshradar
 
-# Rebuild image (if you made changes to code)
-docker-compose up -d --build
+# View last 50 lines of logs
+docker-compose logs --tail=50 meshradar
+
+# Execute command in running container
+docker-compose exec meshradar bash
 ```
 
 ## Data Persistence
